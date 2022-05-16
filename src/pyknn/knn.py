@@ -5,10 +5,8 @@ from pyprofile import timed
 import numpy as np
 import pickle
 import logging as logger
-from functools import lru_cache
 
-glove_weights = '/embeds.npy'
-glove_vocab = '/embeds.vocab.pickle'
+#%% utility functions.
 
 ## utility function
 def cosine_distance(t1, t2):
@@ -16,8 +14,34 @@ def cosine_distance(t1, t2):
     return np.dot(t1, t2)/(np.linalg.norm(t1)*np.linalg.norm(t2) + 1e-9)
 
 
-class GloVeEmbeddings():
+#%% Framework classes.
+
+
+class Embedder():
+
+    _supports_all_words_embeds = True
     
+    def embed_query(self, query, **kwargs):
+        raise NotImplementedError("This method must be overwritten to be useful.")
+
+    @property
+    def embed_length(self):
+        raise NotImplementedError("This method must be overwritten to be useful.")
+
+    @property
+    def zeros(self):
+        raise NotImplementedError("This method must be overwritten to be useful.")
+
+    @property
+    def supports_all_words_embeds(self) -> bool:
+        return self._supports_all_words_embeds
+
+
+class GloVeEmbeddings(Embedder):
+
+    glove_weights = '/embeds.npy'
+    glove_vocab = '/embeds.vocab.pickle'
+
     @timed
     def __init__(self, keys: dict[str, int], weights: list) -> None:
         
@@ -29,8 +53,8 @@ class GloVeEmbeddings():
     @timed
     def from_output_dir(embeds_dir: str, mem_mapped: bool = True):
         logger.info(f"Loading numpy tensors in mem-mapped mode: {mem_mapped}")
-        tensors_file = embeds_dir + glove_weights
-        vocab_file = embeds_dir + glove_vocab
+        tensors_file = embeds_dir + GloVeEmbeddings.glove_weights
+        vocab_file = embeds_dir + GloVeEmbeddings.glove_vocab
         tensors = np.lib.format.open_memmap(tensors_file) if mem_mapped else np.load(tensors_file)
         with open(vocab_file, 'rb') as vf:
             key_map = pickle.load(vf)
@@ -40,15 +64,17 @@ class GloVeEmbeddings():
     def __getitem__(self, key):
         idx = self.__keymap.get(key, -1)
         if idx == -1:
-            return self.zeros()
+            return self.zeros
         return self.__weights[idx]
     
+    @property
     def zeros(self):
-        return np.zeros((self.embed_length()))
+        return np.zeros((self.embed_length))
 
     def __call__(self, key: str):
         return self.__getitem__(key)
 
+    @property
     def embed_length(self):
         return self.__length
     
@@ -61,7 +87,7 @@ class GloVeEmbeddings():
             * `all_word_embeds`: Instead of returning one embedding, return a dictionary with all the words embedded separately in addition to the full query.
         """
 
-        ret = self.zeros()
+        ret = self.zeros
 
         tokens = word_tokenize(query)
         #initialize an embeds dict to collect 
@@ -95,19 +121,19 @@ class GloVeEmbeddings():
 
 class EmbeddingIndex():
 
-    def __init__(self, planes, embeds: GloVeEmbeddings, index: dict = {}) -> None:
+    def __init__(self, planes, embeds: Embedder, index: dict = {}) -> None:
         self.__planes = planes
         self.__embeds = embeds
-        self.__hash_of_zeros = self.hash(embeds.zeros())
+        self.__hash_of_zeros = self.hash(embeds.zeros)
         self.__index = index
         self.__default_space = 'default'
 
-    def from_scratch(num_planes, embeds: GloVeEmbeddings):
-        planes = np.random.normal(size=(num_planes, embeds.embed_length()))
+    def from_scratch(num_planes: int, embeds: Embedder):
+        planes = np.random.normal(size=(num_planes, embeds.embed_length))
         return EmbeddingIndex(planes, embeds)
 
     @timed
-    def from_pickle(filename: str, embeds: GloVeEmbeddings):
+    def from_pickle(filename: str, embeds: Embedder):
         try:
             with open(filename, 'rb') as f:
                 data = pickle.load(f)
@@ -158,6 +184,10 @@ class EmbeddingIndex():
         for key in keys:
             #to avoid double stemming
             embedding_map = self.__embeds.embed_query(key, do_stem=do_stem, all_word_embeds=True)
+            
+            if not self.__embeds.supports_all_words_embeds:
+                embedding_map = {"key": embedding_map} ## if the embedder doesn't support that feature, we just move on
+            
             for embedding_key, embed in embedding_map.items():    
                 bucket = self.hash(embed)
                 space = self.__get_space(space_name)
@@ -170,6 +200,8 @@ class EmbeddingIndex():
     @timed
     def knn_search(self, term: str, k=10, space_name = None, search_words=False, use_synonyms=False, include_search_terms=False):
         
+        search_words = False if not self.__embeds.supports_all_words_embeds else search_words
+
         index = self.__get_space(space_name)
         ##first, locate the bucket of the term.
         embed_q = self.__embeds.embed_query(term, all_word_embeds=search_words)
