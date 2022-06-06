@@ -65,14 +65,14 @@ class GloVeEmbeddings(Embedder):
     
 
     def to_output_dir(self, embeds_dir: str):
-        logger.info("Saving embeddings to {}", embeds_dir)
+        logger.info("Saving embeddings to %s", embeds_dir)
         tensors_file = embeds_dir + GloVeEmbeddings.glove_weights
         vocab_file = embeds_dir + GloVeEmbeddings.glove_vocab
 
-        logger.info("Saving weights to {}", tensors_file)
+        logger.info("Saving weights to %s", tensors_file)
         np.save(tensors_file, self.__weights)
         
-        logger.info("Saving vocab to {}", vocab_file)
+        logger.info("Saving vocab to %s", vocab_file)
         with open(vocab_file, 'wb') as vf:
             pickle.dump(self.__keymap, vf)
 
