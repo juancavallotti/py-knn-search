@@ -1,4 +1,3 @@
-from mimetypes import init
 from nltk import word_tokenize, PorterStemmer, edit_distance
 from nltk.corpus import wordnet as wn
 from pyprofile import timed
@@ -35,7 +34,10 @@ class Embedder():
     @property
     def supports_all_words_embeds(self) -> bool:
         return self._supports_all_words_embeds
-
+    
+    @property
+    def vocab(self) -> list[str]:
+        return []
 
 class GloVeEmbeddings(Embedder):
 
@@ -61,6 +63,19 @@ class GloVeEmbeddings(Embedder):
 
         return GloVeEmbeddings(key_map, tensors)
     
+
+    def to_output_dir(self, embeds_dir: str):
+        logger.info("Saving embeddings to {}", embeds_dir)
+        tensors_file = embeds_dir + GloVeEmbeddings.glove_weights
+        vocab_file = embeds_dir + GloVeEmbeddings.glove_vocab
+
+        logger.info("Saving weights to {}", tensors_file)
+        np.save(tensors_file, self.__weights)
+        
+        logger.info("Saving vocab to {}", vocab_file)
+        with open(vocab_file, 'wb') as vf:
+            pickle.dump(self.__keymap, vf)
+
     def __getitem__(self, key):
         idx = self.__keymap.get(key, -1)
         if idx == -1:
@@ -77,7 +92,32 @@ class GloVeEmbeddings(Embedder):
     @property
     def embed_length(self):
         return self.__length
+
+    @property
+    def vocab(self):
+        return list(self.__keymap.keys())
     
+    def cleanup(self, words: list[str], with_length: int = 3) -> list[str]:
+        #collect the indices of every word on the list that's over the threshold and remove from the index.
+        removed = []
+        #pop all the words from the vocab and rebuild the index
+        for word in words:
+            if word in self.__keymap:
+                if len(word) > with_length:
+                    self.__keymap.pop(word)
+                    removed.append(word)
+        #rebuild
+        weights = []
+        
+        for i, word in enumerate(self.__keymap.keys()):
+            embed = self.__keymap[word]
+            weights.append(self.__weights[embed])
+            self.__keymap[word] = i
+        
+        #finally replace the weights
+        self.__weights = np.array(weights)
+        return removed
+
     #use the retrieved embeddings to embed a query
     def embed_query(self, query, do_stem=True, do_mean=True, all_word_embeds=False):
         """ Generate one or multiple embeddings for the query. 
@@ -170,8 +210,7 @@ class EmbeddingIndex():
         
         if not space_name: space_name = self.__default_space
         
-        ret = self.__index.get(space_name, {})
-        self.__index[space_name] = ret
+        ret = self.__index.setdefault(space_name, {})
         return ret
 
     #check the words out of dict
@@ -267,4 +306,24 @@ class EmbeddingIndex():
             for l in lemmas:
                 parts = l.name().split('.')
                 ret.append(parts[-1].replace('_', ' '))    
+        return ret
+
+    def collect_unrelated_keys(self) -> list[str]:
+        """
+        Cleanup method that hashes all the keys on the index, finds their buckets and if not found, flags them as unrelated terms.
+        This should be a good heuristic for removing keys that will never get used.
+        """
+        index = self.__index
+        embedder = self.__embeds
+        
+        ret = []
+
+        for key in embedder.vocab:
+            bucket = self.hash(embedder[key])
+            #check if there is a bucket on any space of the index, if there is we just skip the word
+
+            #there isnt a bucket for the key in any space
+            if not any([index[space].get(bucket, None) != None for space in index]):
+                ret.append(key)
+
         return ret
