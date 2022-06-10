@@ -1,2 +1,3 @@
-# py-knn-search
-A KNN implementation for symmetric contextual search that works with various word embeddings.
+# KNN Search for Python
+
+This is my artisanal attempt at KNN Search. The intended use of this library is for generic symmetric contextual search and works with various word embeddings through the ```Embedder``` interface.  I use this library throughout my projects, and it’s distributed as-is, according to the terms of its license. I use it on production systems, but please, use it at your own risk.
