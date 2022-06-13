@@ -214,6 +214,7 @@ class EmbeddingIndex():
         return ret
 
     #check the words out of dict
+    @timed
     def out_of_dict_find(self, word, space_name = None, distance=3):
         ood = self.__get_space(space_name).get(self.__hash_of_zeros, [])
         return [ w for w in ood if edit_distance(word, w) <= distance]
@@ -264,14 +265,18 @@ class EmbeddingIndex():
         else:
             buckets = [self.hash(embed) for embed in embed_q.values()] + [self.hash(syn_embed[term]) for syn_embed in synonym_embeds for term in syn_embed]
             term_embeddings = [embed_q[term]] + [syn_embed[term] for syn_embed in synonym_embeds for term in syn_embed]
-  
-        ##then gather elements looking back and forth until we have enough items to compare.
-        candidate_words = self.out_of_dict_find(term, space_name)
+
+        candidate_words = []
 
         for bucket in buckets:
+            if bucket == 0: continue # skip the out of dictionary bucket.
             candidate_words = candidate_words + [i for i in index.get(bucket, []) if i not in candidate_words]
 
-    
+        #if we don't have enough words, first we go out of dict, and then neighboring buckets.
+
+        if len(candidate_words) < k:
+            candidate_words += self.out_of_dict_find(term, space_name)
+
         i = 1
         while len(candidate_words) < k:
             bucket_search = index.get(bucket + i, []) + index.get(bucket - i, [])
