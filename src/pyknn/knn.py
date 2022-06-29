@@ -17,29 +17,54 @@ def cosine_distance(t1, t2):
 
 
 class Embedder():
+    """
+    This class acts as an `interface` and it defines the methods that need to be implemented to use the given embedder for KNN search.
+    """
 
-    _supports_all_words_embeds = True
+    _supports_all_words_embeds = True 
     
     def embed_query(self, query, **kwargs):
+        """
+        Use the embedding model to embed a query, if _supports_all_words_embeds returns True, then this method must be prepared to return 
+        a dictionary of embeddings using every word of the query when the flag is passed as a keyword argument.
+        """
         raise NotImplementedError("This method must be overwritten to be useful.")
 
     @property
     def embed_length(self):
+        """
+        Returns the length of the embedding tensors. The index uses this value to calculate hash values.
+        """
         raise NotImplementedError("This method must be overwritten to be useful.")
 
     @property
     def zeros(self):
+        """
+        Create a tensor with zeros.
+        """
         raise NotImplementedError("This method must be overwritten to be useful.")
 
     @property
     def supports_all_words_embeds(self) -> bool:
+        """
+        Define wether the embedder will support embedding every single word in the search query. This functionality typically
+         helps with accuracy at the cost of performance because terms will map to multiple hash values increasing the likelihood 
+         of a perfect match.
+        """
         return self._supports_all_words_embeds
     
     @property
     def vocab(self) -> list[str]:
+        """
+        Return the vocabulary of the embedder. This functionality is optional, and it helps when going through the exercise of 
+        removing from the embedding model words that are not (and potentially will never be) used, thus helping to save storage space.
+        """
         return []
 
 class GloVeEmbeddings(Embedder):
+    """
+    Sample implementation of an Embedder, using GloVe embeddings.
+    """
 
     glove_weights = '/embeds.npy'
     glove_vocab = '/embeds.vocab.pickle'
@@ -160,7 +185,19 @@ class GloVeEmbeddings(Embedder):
 
 
 class EmbeddingIndex():
+    """
+    This class models the index for KNN search.
 
+    Initial Indexing:
+    * Initially, the user will want to build an index using the `from_scratch` method and a number of hyperplanes.
+    * Next, the user will want to build one or more indexes using the `build_index` method. This class supports indexing multiple spaces.
+    * Finally, the user will want to save the indexes to a pickle file using the `to_pickle` method.
+
+    Production Uage:
+    * Load the pre-built index using the `from_pickle` method.
+    * Perform searches using the `knn_search` method.
+
+    """
     def __init__(self, planes, embeds: Embedder, index: dict = {}) -> None:
         self.__planes = planes
         self.__embeds = embeds
@@ -169,11 +206,27 @@ class EmbeddingIndex():
         self.__default_space = 'default'
 
     def from_scratch(num_planes: int, embeds: Embedder):
+        """
+        Start a brand new index using an embedder and a number of random planes.
+
+        PARAMETERS:
+            * `num_planes`: Defines the number of hyperplanes of the model, this is an hyperparameter and needs to be picked manually according to the amount of data. A fair starting point is 8 to 10.
+            * `embeds`: The implementation of an embedder for this index to use.
+
+
+        """
         planes = np.random.normal(size=(num_planes, embeds.embed_length))
         return EmbeddingIndex(planes, embeds)
 
     @timed
     def from_pickle(filename: str, embeds: Embedder):
+        """
+        Load an embedding index from a file.
+
+        PARAMETERS:
+            * `filename`: The pickle filename where the index is stored.
+            * `embeds`: The embedder used to build the index.
+        """
         try:
             with open(filename, 'rb') as f:
                 data = pickle.load(f)
@@ -186,6 +239,9 @@ class EmbeddingIndex():
             raise
     @timed
     def to_pickle(self, filename):
+        """
+        Save this index to a pickle file.
+        """
         try: 
             with open(filename, 'wb') as f:
                 data = {
@@ -198,6 +254,9 @@ class EmbeddingIndex():
             raise
 
     def hash(self, embedding):
+        """
+        INTERNAL: Apply the hashing function to an embedding tensor.
+        """
         dp = np.dot(embedding, self.__planes.T)
         dps = np.sign(dp)
         bucket = 0
@@ -216,11 +275,22 @@ class EmbeddingIndex():
     #check the words out of dict
     @timed
     def out_of_dict_find(self, word, space_name = None, distance=3):
+        """
+        INTERNAL: Retrieve all the words for the bucket "0".
+        """
         ood = self.__get_space(space_name).get(self.__hash_of_zeros, [])
         return [ w for w in ood if edit_distance(word, w) <= distance]
     
     @timed
     def build_index(self, keys: list[str], space_name: str = None, do_stem=False):
+        """
+        Build the index for the given keys.
+
+        PARAMETERS:
+            * `keys`: The words to index.
+            * `space_name`: The name of the index to use.
+            * `do_stem`: Wether to use stemming before embedding the words or not. This option applies only if the embedder supports embedding each word.
+        """
         for key in keys:
             #to avoid double stemming
             embedding_map = self.__embeds.embed_query(key, do_stem=do_stem, all_word_embeds=True)
@@ -239,7 +309,17 @@ class EmbeddingIndex():
     
     @timed
     def knn_search(self, term: str, k=10, space_name = None, search_words=False, use_synonyms=False, include_search_terms=False):
-        
+        """
+        Perform a search over the index.
+
+        PARAMETERS:
+            * `term`: The search term.
+            * `k`: The number of results to retrieve.
+            * `space_name`: The index to use.
+            * `search_words`: Wether to use each word on the terms or not.
+            * `use_synonyms`: Wether to include synonyms of each word. This feature uses wordnet.
+            * `include_search_terms` Wether to include the search terms + synonyms (if using) on the results or not.
+        """
         search_words = False if not self.__embeds.supports_all_words_embeds else search_words
 
         index = self.__get_space(space_name)
@@ -301,6 +381,9 @@ class EmbeddingIndex():
     
     @timed
     def synonyms(self, term:str):
+        """
+        Collect synonyms of a given search term using wordnet.
+        """
         term = term.replace(' ', '_')
         m = wn.morphy(term, wn.NOUN)
         ret = []
