@@ -9,8 +9,31 @@ import logging as logger
 
 ## utility function
 def cosine_distance(t1, t2):
+    """
+    Perform the cosine distance between params t1 and t2.
+
+    We expect that t1 will have the shape (n, 1) a row vector, and that t2 will be one or more stacked row vectors.
+    """
+    if isinstance(t1, list):
+        t1 = np.array(t1)
+
+    if isinstance(t2, list):
+        t2 = np.array(t2)
+        #fix the shape
+
+    #this is batch 1    
+    if t1.shape == t2.shape:
+        t2 = t2.reshape((1, t2.shape[0]))
+        
+    dp = np.dot(t1, t2.T)
+    norm_t1 = np.linalg.norm(t1)
+    norm_t2 = np.linalg.norm(t2, axis=1)
+    epsilon = 1e-9
+
     #I use to avoid division by 0 1e-9
-    return np.dot(t1, t2)/(np.linalg.norm(t1)*np.linalg.norm(t2) + 1e-9)
+    cd =  dp/(norm_t1 * norm_t2 + epsilon)
+
+    return cd.T
 
 
 #%% Framework classes.
@@ -198,11 +221,12 @@ class EmbeddingIndex():
     * Perform searches using the `knn_search` method.
 
     """
-    def __init__(self, planes, embeds: Embedder, index: dict = {}) -> None:
+    def __init__(self, planes, embeds: Embedder, index: dict = {}, synonyms: dict = {}) -> None:
         self.__planes = planes
         self.__embeds = embeds
         self.__hash_of_zeros = self.hash(embeds.zeros)
         self.__index = index
+        self.__synonyms = synonyms
         self.__default_space = 'default'
 
     def from_scratch(num_planes: int, embeds: Embedder):
@@ -232,7 +256,8 @@ class EmbeddingIndex():
                 data = pickle.load(f)
                 planes = data['planes']
                 index = data['index']
-                return EmbeddingIndex(planes, embeds, index)
+                synonyms = data.get('synonyms', {})
+                return EmbeddingIndex(planes, embeds, index, synonyms)
 
         except:
             logger.error("Error while loading the embedding index from a pickle file...")
@@ -246,7 +271,8 @@ class EmbeddingIndex():
             with open(filename, 'wb') as f:
                 data = {
                     'planes': self.__planes,
-                    'index' : self.__index
+                    'index' : self.__index,
+                    'synonyms': self.__synonyms
                 }
                 pickle.dump(data, f)
         except:
@@ -282,7 +308,7 @@ class EmbeddingIndex():
         return [ w for w in ood if edit_distance(word, w) <= distance]
     
     @timed
-    def build_index(self, keys: list[str], space_name: str = None, do_stem=False):
+    def build_index(self, keys: list[str], space_name: str = None, do_stem=False, collect_synonyms=False):
         """
         Build the index for the given keys.
 
@@ -290,9 +316,13 @@ class EmbeddingIndex():
             * `keys`: The words to index.
             * `space_name`: The name of the index to use.
             * `do_stem`: Wether to use stemming before embedding the words or not. This option applies only if the embedder supports embedding each word.
+            * `collect_synonyms`: Call the synonyms method as to cache the indexed synonyms while indexing.
         """
         for key in keys:
             #to avoid double stemming
+            if collect_synonyms:
+                self.synonyms(key) #simple as tea!
+
             embedding_map = self.__embeds.embed_query(key, do_stem=do_stem, all_word_embeds=True)
             
             if not self.__embeds.supports_all_words_embeds:
@@ -369,24 +399,37 @@ class EmbeddingIndex():
         
         #now we embed each word we found, calculate the cosine 
         #similaity with the search term, and return the results.
+        
+        #embed the candidate words only once
+        candidate_embeds = [self.__embeds.embed_query(w) for w in candidate_words]
+        
+        #for each term, we calculate the cosine distance of that term with all the candidate words.
         for term_embedding in term_embeddings:
-            for word in candidate_words:
-                word_embed = self.__embeds.embed_query(word)
-                cosine = cosine_distance(word_embed, term_embedding)
-                ret.append((word, cosine))
+            
+            cosine = cosine_distance(term_embedding, candidate_embeds)
 
+            #we make an array of tuples 
+            tuples = [(w, c) for w, c in zip(candidate_words, cosine)]
+
+            ret += tuples
         ##finally, sort by cosine similairty and return the K first
         ret = sorted(ret, key=lambda x: x[1], reverse=True)
         return ret[0: k] if not include_search_terms else (ret[0: k], [term] + synonyms)
     
-    @timed
+    #@timed
     def synonyms(self, term:str):
         """
         Collect synonyms of a given search term using wordnet.
         """
+        
+        key = term
+        ret = self.__synonyms.get(key, [])
+
+        if len(ret) > 0:
+            return ret
+
         term = term.replace(' ', '_')
         m = wn.morphy(term, wn.NOUN)
-        ret = []
         if m:
             synonyms = wn.synsets(m)
             for s in synonyms:
@@ -394,12 +437,31 @@ class EmbeddingIndex():
             for l in lemmas:
                 parts = l.name().split('.')
                 ret.append(parts[-1].replace('_', ' '))    
+        
+        ##cache
+        self.__synonyms[key] = ret
+
         return ret
+
+    def dump_index(self, space = None) -> list[str]:
+        """
+        Find all the words that have been indexed and dump them.
+        """
+
+        index = self.__get_space(space)
+
+        words = [w for k in index for w in index[k]]
+
+        return sorted(words)
+
+    @property
+    def planes(self):
+        return np.copy(self.__planes)
 
     def collect_unrelated_keys(self) -> list[str]:
         """
-        Cleanup method that hashes all the keys on the index, finds their buckets and if not found, flags them as unrelated terms.
-        This should be a good heuristic for removing keys that will never get used.
+        Cleanup method that hashes all the terms on the embedded's vocabulary, finds their buckets and if not found, flags them as unrelated terms.
+        This should be a good heuristic for removing embeddings that will never get used.
         """
         index = self.__index
         embedder = self.__embeds
