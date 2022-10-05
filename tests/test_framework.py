@@ -24,6 +24,33 @@ def test_index_size(embedder):
 
     assert len(index.dump_index()) == len(keys)
 
+def test_index_size_awe(awembedder):
+
+    index = EmbeddingIndex.from_scratch(2, awembedder)
+
+    keys = ["a", "b", "c", "a b", "b c", "c d", "b c e "]
+
+    assert len(index.planes) == 2
+
+    index.build_index(keys)
+
+    assert len(index.dump_index()) == len(keys)
+
+def test_index_clean_awe(awembedder):
+
+    index = EmbeddingIndex.from_scratch(2, awembedder)
+
+    keys = ["a", "b", "c", "a b", "b c", "c d", "b c e "]
+
+    assert len(index.planes) == 2
+
+    index.build_index(keys, embed_all_words=True)
+
+    keys = ["a", "b"]
+
+    index.build_index(keys, embed_all_words=True, clean_space=True)
+
+    assert len(index.dump_index()) == len(keys)
 
 def test_search(embedder):
 
