@@ -170,7 +170,7 @@ class GloVeEmbeddings(Embedder):
     def embed_query(self, query, do_stem=True, do_mean=True, all_word_embeds=False):
         """ Generate one or multiple embeddings for the query. 
         OPTIONS: 
-            * `do_stem`: Since the embeddings index is stemmed to reduce size, should this function take care of stemming or is the query pre-stemmed?
+            * `do_stem`: Since the embeddings index might be stemmed to for performance reasons, should I use the stemmer to look into the index?
             * `do_mean`: Mean the embeddings of multiple words to produce a sentence embedding.
             * `all_word_embeds`: Instead of returning one embedding, return a dictionary with all the words embedded separately in addition to the full query.
         """
@@ -307,7 +307,7 @@ class EmbeddingIndex():
         ood = self.__get_space(space_name).get(self.__hash_of_zeros, [])
         return [ w for w in ood if edit_distance(word, w) <= distance]
     
-    @timed
+    
     def build_index(self, keys: list[str], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True):
         """
         Build the index for the given keys.
@@ -344,7 +344,7 @@ class EmbeddingIndex():
         return self
     
     @timed
-    def knn_search(self, term: str, k=10, space_name = None, search_words=False, use_synonyms=False, include_search_terms=False):
+    def knn_search(self, term: str, k=10, space_name = None, search_words=False, use_synonyms=False, include_search_terms=False, use_stemmer=False):
         """
         Perform a search over the index.
 
@@ -355,12 +355,13 @@ class EmbeddingIndex():
             * `search_words`: Wether to use each word on the terms or not.
             * `use_synonyms`: Wether to include synonyms of each word. This feature uses wordnet.
             * `include_search_terms` Wether to include the search terms + synonyms (if using) on the results or not.
+            * `use_stemmer` Indicates if the embedder should try to stem the words before embedding.
         """
         search_words = False if not self.__embeds.supports_all_words_embeds else search_words
 
         index = self.__get_space(space_name)
         ##first, locate the bucket of the term.
-        embed_q = self.__embeds.embed_query(term, all_word_embeds=search_words)
+        embed_q = self.__embeds.embed_query(term, all_word_embeds=search_words, do_stem=use_stemmer)
         term_embeddings = None
 
         synonym_embeds = []
@@ -422,7 +423,6 @@ class EmbeddingIndex():
         ret = sorted(ret, key=lambda x: x[1], reverse=True)
         return ret[0: k] if not include_search_terms else (ret[0: k], [term] + synonyms)
     
-    #@timed
     def synonyms(self, term:str):
         """
         Collect synonyms of a given search term using wordnet.
