@@ -87,3 +87,32 @@ def test_vector_cosine():
     expected = np.array([0, 0.707, 1]).reshape(3, 1)
 
     assert all(np.round(result, 3) == expected)
+
+
+def test_pickle_file(awembedder):
+
+    import tempfile
+    import os
+
+    index = EmbeddingIndex.from_scratch(2, awembedder)
+
+    keys = ["a", "b", "c", "a b", "b c", "c d", "b c e "]
+
+    assert len(index.planes) == 2
+
+    index.build_index(keys, embed_all_words=True)
+
+    filename = f"{tempfile.gettempdir()}/test.pickle"
+
+    try: 
+        index.to_pickle(filename=filename)
+        index = EmbeddingIndex.from_pickle(filename=filename, embeds=awembedder)
+    except:
+        assert False, "Exception while trying to write pickle file"
+    
+    assert os.path.isfile(filename), "Pickle file should exist."
+    #cleanup
+    os.remove(filename)
+
+
+

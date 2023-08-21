@@ -22,6 +22,12 @@ class IndexBackend():
         """
         raise NotImplementedError("Not yet implemented")
 
+    def dump(self) -> dict:
+        """
+        Dump the entire index into a dictionary so it could be stored in pickle format. This operation is optional.
+        """
+        raise NotImplementedError("Not yet implemented")
+
 class DictionaryIndexBackend(IndexBackend):
     """
     Basic implementation to keep backward-compatibility with the old framework.
@@ -39,3 +45,6 @@ class DictionaryIndexBackend(IndexBackend):
     
     def setdefault(self, key, defValue):
         return self.__dict.setdefault(key, defValue)
+    
+    def dump(self) -> dict:
+        return self.__dict

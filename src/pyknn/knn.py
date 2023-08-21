@@ -104,7 +104,7 @@ class EmbeddingIndex():
             with open(filename, 'wb') as f:
                 data = {
                     'planes': self.__planes,
-                    'index' : self.__index,
+                    'index' : self.__index.dump(),
                     'synonyms': self.__synonyms
                 }
                 pickle.dump(data, f)
