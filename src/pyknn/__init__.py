@@ -1,4 +1,5 @@
-from .knn import Embedder, GloVeEmbeddings, EmbeddingIndex
+from .knn import EmbeddingIndex
+from .embeds import Embedder, GloVeEmbeddings
 """
 PY KNN Search - A simple implementation of KNN.
 
