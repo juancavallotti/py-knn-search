@@ -114,5 +114,24 @@ def test_pickle_file(awembedder):
     #cleanup
     os.remove(filename)
 
+def test_different_index_backend(awembedder):
+
+    from pyknn import DictionaryIndexBackend
+
+    be = DictionaryIndexBackend()
+
+    index = EmbeddingIndex.from_scratch(2, awembedder, index_backend=be)
+
+    keys = ["a", "b", "c", "a b", "b c", "c d", "b c e "]
+
+    assert len(index.planes) == 2
+
+    index.build_index(keys, embed_all_words=True)
+
+    dump = be.dump()
+
+    assert len(dump) == 1, "We only defined one space."
+
+    assert len(dump['default']) > 0, "We indexed data in the space"
 
 

@@ -62,7 +62,7 @@ class EmbeddingIndex():
         self.__synonyms = synonyms
         self.__default_space = 'default'
 
-    def from_scratch(num_planes: int, embeds: Embedder):
+    def from_scratch(num_planes: int, embeds: Embedder, index_backend: IndexBackend = DictionaryIndexBackend()):
         """
         Start a brand new index using an embedder and a number of random planes.
 
@@ -73,7 +73,7 @@ class EmbeddingIndex():
 
         """
         planes = np.random.normal(size=(num_planes, embeds.embed_length))
-        return EmbeddingIndex(planes, embeds)
+        return EmbeddingIndex(planes, embeds, index_backend=index_backend)
 
     @timed
     def from_pickle(filename: str, embeds: Embedder):
