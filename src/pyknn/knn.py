@@ -38,6 +38,7 @@ def cosine_distance(t1, t2):
 
 #%% Framework classes.
 from .embeds import Embedder
+from .index import IndexBackend, DictionaryIndexBackend
 
 class EmbeddingIndex():
     """
@@ -53,11 +54,11 @@ class EmbeddingIndex():
     * Perform searches using the `knn_search` method.
 
     """
-    def __init__(self, planes, embeds: Embedder, index: dict = {}, synonyms: dict = {}) -> None:
+    def __init__(self, planes, embeds: Embedder, index: dict = {}, synonyms: dict = {}, index_backend: IndexBackend = None) -> None:
         self.__planes = planes
         self.__embeds = embeds
         self.__hash_of_zeros = self.hash(embeds.zeros)
-        self.__index = index
+        self.__index = index_backend if index_backend != None else DictionaryIndexBackend(data=index)
         self.__synonyms = synonyms
         self.__default_space = 'default'
 

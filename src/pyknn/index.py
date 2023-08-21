@@ -5,13 +5,22 @@ class IndexBackend():
     """
 
     def __getitem__(self, key):
-        "Read an item by key in the index."
+        """
+        Read an item by key in the index.
+        """
         raise NotImplementedError("Not yet implemented")
     
     def __setitem__(self, key, value):
-        "Write an item by key in the inex."
+        """
+        Write an item by key in the inex.
+        """
         raise NotImplementedError("Not yet implemented")
     
+    def setdefault(self, key, defValue):
+        """
+        Simulate the dictionary setdefault operation.
+        """
+        raise NotImplementedError("Not yet implemented")
 
 class DictionaryIndexBackend(IndexBackend):
     """
@@ -27,3 +36,6 @@ class DictionaryIndexBackend(IndexBackend):
 
     def __setitem__(self, key, value):
         self.__dict[key] = value
+    
+    def setdefault(self, key, defValue):
+        return self.__dict.setdefault(key, defValue)
