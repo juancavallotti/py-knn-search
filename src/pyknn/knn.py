@@ -2,7 +2,6 @@ from nltk import edit_distance
 from nltk.corpus import wordnet as wn
 from pyprofile import timed
 import numpy as np
-import pickle
 import logging as logger
 
 #%% utility functions.
@@ -124,7 +123,7 @@ class EmbeddingIndex():
             provider = PicklePersistenceProvider(filename)
             self.to_provider(provider)
         except:
-            logger.error(f"Error while writing pickle file {f}")
+            logger.error(f"Error while writing pickle file {filename}")
             raise
 
     def hash(self, embedding):
