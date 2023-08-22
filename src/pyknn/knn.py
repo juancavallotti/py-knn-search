@@ -257,6 +257,9 @@ class EmbeddingIndex():
         #embed the candidate words only once
         candidate_embeds = [self.__embeds.embed_query(w, do_stem=use_stemmer) for w in candidate_words]
         
+        if len(candidate_embeds) == 0:
+            return [] if not include_search_terms else ([], [term] + synonyms)
+
         #for each term, we calculate the cosine distance of that term with all the candidate words.
         for term_embedding in term_embeddings:
             

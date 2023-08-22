@@ -145,4 +145,9 @@ def test_index_multiple(awembedder):
     dump = index.dump_index()
     assert len(dump) == 2
 
+def test_search_empty(awembedder):
+    index = EmbeddingIndex.from_scratch(2, awembedder)
+    result = index.knn_search("some term")
+    assert len(result) == 0, "Empty index produces no results"
+
 
