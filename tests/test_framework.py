@@ -135,4 +135,14 @@ def test_different_index_backend(awembedder):
 
     assert len(dump['default']) > 0, "We indexed data in the space"
 
+def test_index_multiple(awembedder):
+
+    index = EmbeddingIndex.from_scratch(4, awembedder)
+
+    index.build_index(["First element"])
+    index.build_index(["Second element"], clean_space=False)
+    
+    dump = index.dump_index()
+    assert len(dump) == 2
+
 
