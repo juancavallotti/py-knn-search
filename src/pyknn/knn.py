@@ -1,3 +1,4 @@
+from typing import Union
 from nltk import edit_distance
 from nltk.corpus import wordnet as wn
 from pyprofile import timed
@@ -34,6 +35,13 @@ def cosine_distance(t1, t2):
 
     return cd.T
 
+def indexable(value: Union[str, dict]):
+    if isinstance(value, str):
+        return value
+    elif isinstance(value, dict):
+        return value['key']
+    else:
+        raise NotImplementedError("Cannot index objects that aren't strings or dictionaries.")
 
 #%% Framework classes.
 from .embeds import Embedder
@@ -155,7 +163,7 @@ class EmbeddingIndex():
         return [ w for w in ood if edit_distance(word, w) <= distance]
     
     
-    def build_index(self, keys: list[str], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True):
+    def build_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True):
         """
         Build the index for the given keys.
 
@@ -173,11 +181,14 @@ class EmbeddingIndex():
                 
 
         for key in keys:
+
+            actualKey = indexable(key)
+
             #to avoid double stemming
             if collect_synonyms:
-                self.synonyms(key) #simple as tea!
+                self.synonyms(actualKey) #simple as tea!
 
-            embedding_map = self.__embeds.embed_query(key, do_stem=do_stem, all_word_embeds=embed_all_words)
+            embedding_map = self.__embeds.embed_query(actualKey, do_stem=do_stem, all_word_embeds=embed_all_words)
             
             if not self.__embeds.supports_all_words_embeds:
                 embedding_map = {"key": embedding_map} ## if the embedder doesn't support that feature, we just move on
@@ -255,7 +266,7 @@ class EmbeddingIndex():
         #similaity with the search term, and return the results.
         
         #embed the candidate words only once
-        candidate_embeds = [self.__embeds.embed_query(w, do_stem=use_stemmer) for w in candidate_words]
+        candidate_embeds = [self.__embeds.embed_query(indexable(w), do_stem=use_stemmer) for w in candidate_words]
         
         if len(candidate_embeds) == 0:
             return [] if not include_search_terms else ([], [term] + synonyms)
@@ -307,7 +318,7 @@ class EmbeddingIndex():
         index = self.__get_space(space)
 
         ##use a set comprehension
-        words = {w for k in index for w in index[k]}
+        words = {indexable(w) for k in index for w in index[k]}
 
         return sorted(words)
 

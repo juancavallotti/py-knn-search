@@ -151,3 +151,17 @@ def test_search_empty(awembedder):
     assert len(result) == 0, "Empty index produces no results"
 
 
+def test_index_objects(awembedder):
+    index = EmbeddingIndex.from_scratch(4, awembedder)
+
+    index.build_index([{'key':"First element", 'metadata': "something"}])
+    index.build_index([{'key':"Second element", 'metadata': "something"}], clean_space=False)
+
+    dump = index.dump_index()
+    assert len(dump) == 2, "Index wasn't dumped correctly."
+
+    #try to perform a search
+    results = index.knn_search("element", search_words=True)
+    assert len(results) > 0, "Search was not successful."
+
+    

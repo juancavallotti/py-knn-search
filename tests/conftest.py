@@ -42,7 +42,7 @@ class MyAllWordEmb(Embedder):
     def embed_length(self):
         return 300
 
-    def embed_query(self, query, all_word_embeds: bool, **kwargs):
+    def embed_query(self, query, all_word_embeds: bool = False, **kwargs):
         self.called = True
 
         if not all_word_embeds:
