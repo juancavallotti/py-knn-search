@@ -114,6 +114,7 @@ def test_pickle_file(awembedder):
     #cleanup
     os.remove(filename)
 
+
 def test_different_index_backend(awembedder):
 
     from pyknn import DictionaryIndexBackend

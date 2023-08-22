@@ -39,6 +39,8 @@ def cosine_distance(t1, t2):
 #%% Framework classes.
 from .embeds import Embedder
 from .index import IndexBackend, DictionaryIndexBackend
+from .persistence import PersistenceProvider, PicklePersistenceProvider
+
 
 class EmbeddingIndex():
     """
@@ -75,6 +77,28 @@ class EmbeddingIndex():
         planes = np.random.normal(size=(num_planes, embeds.embed_length))
         return EmbeddingIndex(planes, embeds, index_backend=index_backend)
 
+    def from_provider(provider: PersistenceProvider, embeds: Embedder):
+        """
+        Load an embedding index from a given persistence provider.
+        """
+        try:
+            planes, idxbe, syns = provider.read()
+            return EmbeddingIndex(planes, embeds=embeds, synonyms=syns, index_backend=idxbe)
+        except:
+            logger.error("Error while loding the embedding index using provider.")
+            raise
+
+    def to_provider(self, provider: PersistenceProvider):
+        """
+        Store this embedding index using the given persistence provider.
+        """
+        try:
+            provider.persist(self.__planes, self.__index, self.__synonyms)
+        except:
+            logger.error("Error while persisting the embedding index using provider.")
+            raise
+
+
     @timed
     def from_pickle(filename: str, embeds: Embedder):
         """
@@ -85,12 +109,8 @@ class EmbeddingIndex():
             * `embeds`: The embedder used to build the index.
         """
         try:
-            with open(filename, 'rb') as f:
-                data = pickle.load(f)
-                planes = data['planes']
-                index = data['index']
-                synonyms = data.get('synonyms', {})
-                return EmbeddingIndex(planes, embeds, index, synonyms)
+            provider = PicklePersistenceProvider(filename)
+            return EmbeddingIndex.from_provider(provider, embeds)
 
         except:
             logger.error("Error while loading the embedding index from a pickle file...")
@@ -101,13 +121,8 @@ class EmbeddingIndex():
         Save this index to a pickle file.
         """
         try: 
-            with open(filename, 'wb') as f:
-                data = {
-                    'planes': self.__planes,
-                    'index' : self.__index.dump(),
-                    'synonyms': self.__synonyms
-                }
-                pickle.dump(data, f)
+            provider = PicklePersistenceProvider(filename)
+            self.to_provider(provider)
         except:
             logger.error(f"Error while writing pickle file {f}")
             raise
