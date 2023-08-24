@@ -195,10 +195,11 @@ class EmbeddingIndex():
         INTERNAL: Retrieve all the words for the bucket "0".
         """
         ood = self.__get_space(space_name).get(self.__hash_of_zeros, [])
-        return [ w for w in ood if edit_distance(word, w) <= distance]
+        
+        return [ w for w in ood if edit_distance(word, self.__index_resolver.resolveIndexKeys(w)[0]) <= distance]
     
     
-    def build_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True):
+    def build_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True, embedder_extra_args = {}):
         """
         Build the index for the given keys.
 
@@ -223,7 +224,7 @@ class EmbeddingIndex():
             if collect_synonyms:
                 self.synonyms(actualKey) #simple as tea!
 
-            embedding_map = self.__embeds.embed_query(actualKey, do_stem=do_stem, all_word_embeds=embed_all_words)
+            embedding_map = self.__embeds.embed_query(actualKey, do_stem=do_stem, all_word_embeds=embed_all_words, **embedder_extra_args)
             
             if not self.__embeds.supports_all_words_embeds:
                 embedding_map = {"key": embedding_map} ## if the embedder doesn't support that feature, we just move on
@@ -237,7 +238,7 @@ class EmbeddingIndex():
         return self
     
     @timed
-    def knn_search(self, term: str, k=10, space_name = None, search_words=False, use_synonyms=False, include_search_terms=False, use_stemmer=False):
+    def knn_search(self, term: str, k=10, space_name = None, search_words=False, use_synonyms=False, include_search_terms=False, use_stemmer=False, embedder_extra_args={}):
         """
         Perform a search over the index.
 
@@ -254,7 +255,7 @@ class EmbeddingIndex():
 
         index = self.__get_space(space_name)
         ##first, locate the bucket of the term.
-        embed_q = self.__embeds.embed_query(term, all_word_embeds=search_words, do_stem=use_stemmer)
+        embed_q = self.__embeds.embed_query(term, all_word_embeds=search_words, do_stem=use_stemmer, **embedder_extra_args)
         term_embeddings = None
 
         synonym_embeds = []
@@ -266,7 +267,7 @@ class EmbeddingIndex():
                 synonyms.pop(synonyms.index(term))
             #embed the synonyms
             for s in synonyms:
-                s_embed = self.__embeds.embed_query(s, all_word_embeds=search_words)
+                s_embed = self.__embeds.embed_query(s, all_word_embeds=search_words, **embedder_extra_args)
                 synonym_embeds.append(s_embed)
 
         if not search_words:
@@ -301,7 +302,7 @@ class EmbeddingIndex():
         #similaity with the search term, and return the results.
         
         #embed the candidate words only once
-        candidate_embeds = [self.__embeds.embed_query(self.__index_resolver.resolveIndexKeys(w)[0], do_stem=use_stemmer) for w in candidate_words]
+        candidate_embeds = [self.__embeds.embed_query(self.__index_resolver.resolveIndexKeys(w)[0], do_stem=use_stemmer, **embedder_extra_args) for w in candidate_words]
         
         if len(candidate_embeds) == 0:
             return [] if not include_search_terms else ([], [term] + synonyms)
