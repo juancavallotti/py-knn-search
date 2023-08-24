@@ -199,33 +199,76 @@ class EmbeddingIndex():
         return [ w for w in ood if edit_distance(word, self.__index_resolver.resolveIndexKeys(w)[0]) <= distance]
     
     
+    def __embed_key(self, key: Union[str, dict], do_stem=False, collect_synonyms=False, embed_all_words=True, embedder_extra_args={}):
+        actualKey = self.__index_resolver.resolveIndexKeys(key)[0]
 
-    def __embed_keys(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True, embedder_extra_args = {}):
+        #to avoid double stemming
+        if collect_synonyms:
+            self.synonyms(actualKey) #simple as tea!
+
+        return self.__embeds.embed_query(actualKey, do_stem=do_stem, all_word_embeds=embed_all_words, **embedder_extra_args)
+            
+
+    def __embed_keys(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, embedder_extra_args = {}):
         """
         Utility generator that can be reused for updating and deleting.
         """
-        
-        space = self.__get_space(space_name)
-
-        if clean_space:
-            space.clear()
-                
 
         for key in keys:
 
-            actualKey = self.__index_resolver.resolveIndexKeys(key)[0]
-
-            #to avoid double stemming
-            if collect_synonyms:
-                self.synonyms(actualKey) #simple as tea!
-
-            embedding_map = self.__embeds.embed_query(actualKey, do_stem=do_stem, all_word_embeds=embed_all_words, **embedder_extra_args)
+            embedding_map = self.__embed_key(key, do_stem, collect_synonyms, embed_all_words, embedder_extra_args)
             
             if not self.__embeds.supports_all_words_embeds:
                 embedding_map = {"key": embedding_map} ## if the embedder doesn't support that feature, we just move on
             
-            yield embedding_map, key, space
+            yield embedding_map, key
 
+
+    def update_index(self, old_keys: Union[list[str], list[dict]], keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, embedder_extra_args = {}):
+        space = self.__get_space(space_name)
+
+        for (old_embedding_map, old_key), key in zip(self.__embed_keys(old_keys,space_name, do_stem, collect_synonyms, embed_all_words, embedder_extra_args), keys):    
+            new_embedding_map = self.__embed_key(key, do_stem, collect_synonyms, embed_all_words, embedder_extra_args)
+            for (embedding_key, old_embed), (new_key, embed) in zip(old_embedding_map.items(), new_embedding_map.items()):
+                old_bucket = self.hash(old_embed)
+                new_bucket = self.hash(embed)
+                old_bucket_list = space.get(old_bucket, [])
+                new_bucket_list = space.get(new_bucket, [])
+                
+                new_key_id = self.__index_resolver.resolveIdentity(key)
+
+                if id(old_bucket_list) != id(new_bucket_list):
+                    #if we hashed to different lists:
+                    old_bucket_list = list(filter(lambda item : self.__index_resolver.resolveIdentity(item) != new_key_id, old_bucket_list))
+                    #the new bucket list could also contain the key so now we will add it back
+                    new_bucket_list = list(filter(lambda item : self.__index_resolver.resolveIdentity(item) != new_key_id, new_bucket_list))
+                    new_bucket_list.append(key)
+                    space[new_bucket] = new_bucket_list
+                    space[old_bucket] = old_bucket_list
+                else:
+                    #if we have just one, we can simply update it
+                    for i, indexed_key in enumerate(new_bucket_list):
+                        indexed_key_id = self.__index_resolver.resolveIdentity(indexed_key)
+                        if (indexed_key_id == new_key_id):
+                            new_bucket_list[i] = key
+                            space[new_bucket] = new_bucket_list
+                #go through the bucket list and update as necessary
+        
+        return self
+
+    def delete_from_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, embedder_extra_args = {}):
+        space = self.__get_space(space_name)
+
+        for embedding_map, key in self.__embed_keys(keys,space_name, do_stem, collect_synonyms, embed_all_words, embedder_extra_args):
+            for embedding_key, embed in embedding_map.items():
+                bucket = self.hash(embed)
+                bucket_list = space.get(bucket, [])
+                key_id = self.__index_resolver.resolveIdentity(key)
+                bucket_list = list(filter(lambda item: self.__index_resolver.resolveIdentity(item) != key_id, bucket_list))
+                space[bucket] = bucket_list
+                #go through the bucket list and update as necessary
+        
+        return self
 
     def build_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True, embedder_extra_args = {}):
         """
@@ -237,7 +280,13 @@ class EmbeddingIndex():
             * `do_stem`: Wether to use stemming before embedding the words or not. This option applies only if the embedder supports embedding each word.
             * `collect_synonyms`: Call the synonyms method as to cache the indexed synonyms while indexing.
         """
-        for embedding_map, key, space in self.__embed_keys(keys,space_name, do_stem, collect_synonyms, embed_all_words, clean_space, embedder_extra_args):    
+        
+        space = self.__get_space(space_name)
+
+        if clean_space:
+            space.clear()
+
+        for embedding_map, key in self.__embed_keys(keys,space_name, do_stem, collect_synonyms, embed_all_words, embedder_extra_args):    
             for embedding_key, embed in embedding_map.items():    
                 bucket = self.hash(embed)
                 bucket_list = space.get(bucket, [])

@@ -187,8 +187,48 @@ def test_embedder_args_call(embedder):
     assert embedder.calls[2][1]['cache'] == False
     
 
-def test_update_item(simpleIndex):
-    pass
+def test_update_item(simpleIndex: EmbeddingIndex):
+    
+    element_target = {'key':"element arg_call", 'metadata': "something", "id": "123"}
+    element_other = {'key':"irrelevant element", 'metadata': "something else", "id": "124"}
+    
+    element_changed = dict(element_target)
+    element_changed['key'] = "I've changed the key a lot"
+    element_changed['metadata'] = "I've changed the metadata a lot"
+    
+    other_copy = dict(element_other)
 
-def test_delete_item(simpleIndex):
-    pass
+    assert id(element_other) != id(other_copy), "Other should be different elements"
+
+    simpleIndex.build_index([element_target, element_other])
+
+    simpleIndex.update_index(old_keys=[element_target], keys=[element_changed])
+
+    result = simpleIndex.knn_search(element_changed["key"])[0][0]
+
+    assert result["key"] == element_changed["key"]
+    assert result["metadata"] == element_changed["metadata"]
+
+    dump = simpleIndex.dump_index()
+    assert len(dump) == 2
+    assert element_target["key"] not in dump
+    assert element_other["key"] in dump
+    assert element_changed["key"] in dump
+    #run the update
+
+
+def test_delete_item(simpleIndex: EmbeddingIndex):
+    
+    element_target = {'key':"element arg_call", 'metadata': "something", "id": "123"}
+    element_other = {'key':"irrelevant element", 'metadata': "something else", "id": "124"}
+    
+    simpleIndex.build_index([element_target, element_other])
+
+    dump = simpleIndex.dump_index()
+    assert len(dump) == 2
+
+    simpleIndex.delete_from_index([element_target])
+
+    dump = simpleIndex.dump_index()
+    assert len(dump) == 1
+    assert element_other['key'] in dump
