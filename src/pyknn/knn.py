@@ -224,6 +224,7 @@ class EmbeddingIndex():
             yield embedding_map, key
 
 
+    @timed
     def update_index(self, old_keys: Union[list[str], list[dict]], keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, embedder_extra_args = {}):
         space = self.__get_space(space_name)
 
@@ -256,6 +257,7 @@ class EmbeddingIndex():
         
         return self
 
+    @timed
     def delete_from_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, embedder_extra_args = {}):
         space = self.__get_space(space_name)
 
