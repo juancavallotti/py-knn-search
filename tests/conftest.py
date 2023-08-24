@@ -3,15 +3,16 @@ from pyknn import Embedder
 import numpy as np
 from pytest import fixture
 from nltk import word_tokenize
+from pyknn.index import DictionaryIndexBackend
+
+from pyknn.knn import EmbeddingIndex
 
 class MyEmb(Embedder):
     
-    called = False
-    calls = []
-
     def __init__(self) -> None:
         super().__init__()
         self._supports_all_words_embeds = False
+        self.calls = []
         
 
     @property
@@ -73,3 +74,7 @@ def embedder():
 @fixture
 def awembedder():
     return MyAllWordEmb()
+
+@fixture
+def simpleIndex(awembedder):
+    return EmbeddingIndex.from_scratch(2, awembedder, DictionaryIndexBackend(data={}))

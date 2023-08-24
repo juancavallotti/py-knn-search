@@ -199,17 +199,12 @@ class EmbeddingIndex():
         return [ w for w in ood if edit_distance(word, self.__index_resolver.resolveIndexKeys(w)[0]) <= distance]
     
     
-    def build_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True, embedder_extra_args = {}):
-        """
-        Build the index for the given keys.
 
-        PARAMETERS:
-            * `keys`: The words to index.
-            * `space_name`: The name of the index to use.
-            * `do_stem`: Wether to use stemming before embedding the words or not. This option applies only if the embedder supports embedding each word.
-            * `collect_synonyms`: Call the synonyms method as to cache the indexed synonyms while indexing.
+    def __embed_keys(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True, embedder_extra_args = {}):
         """
-
+        Utility generator that can be reused for updating and deleting.
+        """
+        
         space = self.__get_space(space_name)
 
         if clean_space:
@@ -229,6 +224,20 @@ class EmbeddingIndex():
             if not self.__embeds.supports_all_words_embeds:
                 embedding_map = {"key": embedding_map} ## if the embedder doesn't support that feature, we just move on
             
+            yield embedding_map, key, space
+
+
+    def build_index(self, keys: Union[list[str], list[dict]], space_name: str = None, do_stem=False, collect_synonyms=False, embed_all_words=True, clean_space = True, embedder_extra_args = {}):
+        """
+        Build the index for the given keys.
+
+        PARAMETERS:
+            * `keys`: The words to index.
+            * `space_name`: The name of the index to use.
+            * `do_stem`: Wether to use stemming before embedding the words or not. This option applies only if the embedder supports embedding each word.
+            * `collect_synonyms`: Call the synonyms method as to cache the indexed synonyms while indexing.
+        """
+        for embedding_map, key, space in self.__embed_keys(keys,space_name, do_stem, collect_synonyms, embed_all_words, clean_space, embedder_extra_args):    
             for embedding_key, embed in embedding_map.items():    
                 bucket = self.hash(embed)
                 bucket_list = space.get(bucket, [])

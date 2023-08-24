@@ -154,8 +154,8 @@ def test_search_empty(awembedder):
     assert len(result) == 0, "Empty index produces no results"
 
 
-def test_index_objects(awembedder):
-    index = EmbeddingIndex.from_scratch(4, awembedder, index_backend=DictionaryIndexBackend(data={}))
+def test_index_objects(simpleIndex):
+    index = simpleIndex
 
     index.build_index([{'key':"First element tio", 'metadata': "something"}])
     index.build_index([{'key':"Second element tio", 'metadata': "something"}], clean_space=False)
@@ -187,4 +187,8 @@ def test_embedder_args_call(embedder):
     assert embedder.calls[2][1]['cache'] == False
     
 
+def test_update_item(simpleIndex):
+    pass
 
+def test_delete_item(simpleIndex):
+    pass
