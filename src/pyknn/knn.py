@@ -35,19 +35,53 @@ def cosine_distance(t1, t2):
 
     return cd.T
 
-def indexable(value: Union[str, dict]):
-    if isinstance(value, str):
-        return value
-    elif isinstance(value, dict):
-        return value['key']
-    else:
-        raise NotImplementedError("Cannot index objects that aren't strings or dictionaries.")
 
 #%% Framework classes.
 from .embeds import Embedder
 from .index import IndexBackend, DictionaryIndexBackend
 from .persistence import PersistenceProvider, PicklePersistenceProvider
 
+
+class IndexElementResolver():
+    """
+    As we allow indexing of more complex types and backends we now have the need to update it and reading it in different ways.
+    
+    NOTE: In the future we will deprecate the old way of indexing through a straight tokenizer and allow index resolution through keywords
+    and phrases. This will ensure that we hit the right bucket each time. To do this we will upgrade the current implementation to leverage
+    this index resolver, that we will allow users to customize. This will add flexibility to the implementation and remove unnecessary
+    responsiblity from the embedder.
+    
+    """
+    def resolveIndexKeys(slef, value: Union[str, dict]) -> list[str]:
+        """
+        NOTE: for this to work that beautifully I have to break compatibility. For now the implementation will use only the first
+        element of the returned array, but I will leave the interface forward-looking to make migrations easier.
+        """
+        raise NotImplementedError("Implement me.")
+    
+    def resolveIdentity(self, value: Union[str, dict]) -> str:
+        raise NotImplementedError("Implement me.")
+
+
+class DefaultIndexElementResolver(IndexElementResolver):
+
+    def resolveIndexKeys(slef, value: Union[str, dict]) -> list[str]:
+
+        if isinstance(value, str):
+            return [value]
+        elif isinstance(value, dict):
+            return [value['key']]
+        else:
+            raise NotImplementedError("Cannot index objects that aren't strings or dictionaries.")
+    
+
+    def resolveIdentity(self, value: Union[str, dict]) -> str:
+        if isinstance(value, str):
+            return value
+        elif isinstance(value, dict):
+            return value['id']
+        else:
+            raise NotImplementedError("Cannot index objects that aren't strings or dictionaries.")        
 
 class EmbeddingIndex():
     """
@@ -63,13 +97,14 @@ class EmbeddingIndex():
     * Perform searches using the `knn_search` method.
 
     """
-    def __init__(self, planes, embeds: Embedder, index: dict = {}, synonyms: dict = {}, index_backend: IndexBackend = None) -> None:
+    def __init__(self, planes, embeds: Embedder, index: dict = {}, synonyms: dict = {}, index_backend: IndexBackend = None, index_resolver: IndexElementResolver = DefaultIndexElementResolver()) -> None:
         self.__planes = planes
         self.__embeds = embeds
         self.__hash_of_zeros = self.hash(embeds.zeros)
         self.__index = index_backend if index_backend != None else DictionaryIndexBackend(data=index)
         self.__synonyms = synonyms
         self.__default_space = 'default'
+        self.__index_resolver = index_resolver
 
     def from_scratch(num_planes: int, embeds: Embedder, index_backend: IndexBackend = DictionaryIndexBackend()):
         """
@@ -182,7 +217,7 @@ class EmbeddingIndex():
 
         for key in keys:
 
-            actualKey = indexable(key)
+            actualKey = self.__index_resolver.resolveIndexKeys(key)[0]
 
             #to avoid double stemming
             if collect_synonyms:
@@ -266,7 +301,7 @@ class EmbeddingIndex():
         #similaity with the search term, and return the results.
         
         #embed the candidate words only once
-        candidate_embeds = [self.__embeds.embed_query(indexable(w), do_stem=use_stemmer) for w in candidate_words]
+        candidate_embeds = [self.__embeds.embed_query(self.__index_resolver.resolveIndexKeys(w)[0], do_stem=use_stemmer) for w in candidate_words]
         
         if len(candidate_embeds) == 0:
             return [] if not include_search_terms else ([], [term] + synonyms)
@@ -318,7 +353,7 @@ class EmbeddingIndex():
         index = self.__get_space(space)
 
         ##use a set comprehension
-        words = {indexable(w) for k in index for w in index[k]}
+        words = {self.__index_resolver.resolveIndexKeys(w)[0] for k in index for w in index[k]}
 
         return sorted(words)
 
