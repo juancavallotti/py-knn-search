@@ -7,6 +7,7 @@ from nltk import word_tokenize
 class MyEmb(Embedder):
     
     called = False
+    calls = []
 
     def __init__(self) -> None:
         super().__init__()
@@ -23,6 +24,7 @@ class MyEmb(Embedder):
 
     def embed_query(self, query, **kwargs):
         self.called = True
+        self.calls.append((query, kwargs))
         return self.zeros
 
 

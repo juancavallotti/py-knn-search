@@ -1,4 +1,5 @@
 from pyknn import EmbeddingIndex
+from pyknn.index import DictionaryIndexBackend
 from pyknn.knn import cosine_distance
 import numpy as np
 
@@ -146,16 +147,18 @@ def test_index_multiple(awembedder):
     assert len(dump) == 2
 
 def test_search_empty(awembedder):
-    index = EmbeddingIndex.from_scratch(2, awembedder)
+
+    ## NOTE: I have to look into this concurrency issue, to see if this is how python behaves or not.
+    index = EmbeddingIndex.from_scratch(2, awembedder, index_backend=DictionaryIndexBackend(data={}))
     result = index.knn_search("some term")
     assert len(result) == 0, "Empty index produces no results"
 
 
 def test_index_objects(awembedder):
-    index = EmbeddingIndex.from_scratch(4, awembedder)
+    index = EmbeddingIndex.from_scratch(4, awembedder, index_backend=DictionaryIndexBackend(data={}))
 
-    index.build_index([{'key':"First element", 'metadata': "something"}])
-    index.build_index([{'key':"Second element", 'metadata': "something"}], clean_space=False)
+    index.build_index([{'key':"First element tio", 'metadata': "something"}])
+    index.build_index([{'key':"Second element tio", 'metadata': "something"}], clean_space=False)
 
     dump = index.dump_index()
     assert len(dump) == 2, "Index wasn't dumped correctly."
@@ -164,4 +167,24 @@ def test_index_objects(awembedder):
     results = index.knn_search("element", search_words=True)
     assert len(results) > 0, "Search was not successful."
 
+
+def test_embedder_args_call(embedder):
+    index = EmbeddingIndex.from_scratch(2, embedder, index_backend=DictionaryIndexBackend(data={}))
+
+    index.build_index([{'key':"element arg_call", 'metadata': "something"}], embedder_extra_args={'cache': True})
+
+    #cause with this embedder we fall out of dict and the similarity is the edit distance.
+    result = index.knn_search("element arg_cal", embedder_extra_args={'cache': False})
+
+    assert len(result) == 1, "We only had indexed one element"
+
+    #we should have called the embedder at least 3 times, one with cache and the rest without.
+
+    assert len(embedder.calls) == 3, "Embedder wasnt called the right times" 
+
+    assert embedder.calls[0][1]['cache'] == True
+    assert embedder.calls[1][1]['cache'] == False
+    assert embedder.calls[2][1]['cache'] == False
     
+
+
